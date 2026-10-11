@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vitarights Onboarding
  * Description: Kleine Anpassungen für das Partner-Onboarding (Tutor LMS + Magic Login).
- * Version:     1.7.2
+ * Version:     1.7.3
  * Author:      Vitarights
  * Update URI:  https://github.com/twdnhfr/vitarights-onboarding-plugin
  * License:     GPL-2.0-or-later
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Muss zur Version im Kopf passen (make release prüft das)
-const VITARIGHTS_ONBOARDING_VERSION = '1.7.2';
+const VITARIGHTS_ONBOARDING_VERSION = '1.7.3';
 const VITARIGHTS_ONBOARDING_FILE    = __FILE__;
 
 require __DIR__ . '/partner-invite.php';
@@ -364,8 +364,22 @@ function vitarights_onboarding_course_lang( $course_id ) {
 function vitarights_onboarding_user_locale( $user ) {
 	$user_id = $user instanceof WP_User ? $user->ID : (int) $user;
 	$locale  = $user_id ? get_user_meta( $user_id, 'locale', true ) : '';
-	return $locale ? $locale : ( get_option( 'WPLANG' ) ?: 'en_US' );
+	return $locale ? $locale : vitarights_onboarding_site_locale();
 }
+
+/**
+ * Website-Sprache, festgehalten beim Laden des Plugins – vor jeder Umschaltung. Nicht aus der Option
+ * WPLANG: Bei einer Installation aus dem deutschen Paket (wp core download --locale=de_DE, so auf
+ * Linevast) ist sie leer und die Sprache kommt aus dem Paket; get_locale() kennt beide Quellen.
+ */
+function vitarights_onboarding_site_locale() {
+	static $locale = null;
+	if ( null === $locale ) {
+		$locale = get_locale();
+	}
+	return $locale;
+}
+vitarights_onboarding_site_locale();
 
 function vitarights_onboarding_locale_lang( $locale ) {
 	return array_search( $locale, VITARIGHTS_ONBOARDING_LANGS, true ) ?: 'de';
