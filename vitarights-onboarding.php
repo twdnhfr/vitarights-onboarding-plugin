@@ -1,0 +1,643 @@
+<?php
+/**
+ * Plugin Name: Vitarights Onboarding
+ * Description: Kleine Anpassungen für das Partner-Onboarding (Tutor LMS + Magic Login).
+ * Version:     1.6.1
+ * Author:      Vitarights
+ * Update URI:  https://github.com/twdnhfr/vitarights-onboarding-plugin
+ * License:     GPL-2.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+// Muss zur Version im Kopf passen (make release prüft das)
+const VITARIGHTS_ONBOARDING_VERSION = '1.6.1';
+const VITARIGHTS_ONBOARDING_FILE    = __FILE__;
+
+require __DIR__ . '/partner-invite.php';
+require __DIR__ . '/partner-admin.php';
+require __DIR__ . '/upgrade.php';
+require __DIR__ . '/updater.php';
+
+/**
+ * Der Kurs eines Partners, falls er in mehreren eingeschrieben ist (z. B. über den Magic Link
+ * versehentlich zusätzlich im Basic-Kurs): abgeschlossene zuerst, dann höchster Fortschritt,
+ * dann zuletzt eingeschrieben. Null ohne Einschreibung.
+ */
+function vitarights_onboarding_course_url( $user_id = 0 ) {
+	$course_id = vitarights_onboarding_course_id( $user_id );
+	return $course_id ? get_permalink( $course_id ) : null;
+}
+
+function vitarights_onboarding_course_id( $user_id = 0 ) {
+	if ( ! function_exists( 'tutor_utils' ) ) {
+		return null;
+	}
+	$user_id    = $user_id ? $user_id : get_current_user_id();
+	$course_ids = tutor_utils()->get_enrolled_courses_ids_by_user( $user_id );
+	if ( ! $course_ids ) {
+		return null;
+	}
+
+	$ranked = array();
+	foreach ( $course_ids as $course_id ) {
+		$enrolled = tutor_utils()->is_enrolled( $course_id, $user_id );
+		$ranked[] = array(
+			'id'        => (int) $course_id,
+			'completed' => tutor_utils()->is_completed_course( $course_id, $user_id ) ? 1 : 0,
+			'progress'  => (int) tutor_utils()->get_course_completed_percent( $course_id, $user_id ),
+			'enrolled'  => $enrolled ? strtotime( $enrolled->post_date_gmt ) : 0,
+		);
+	}
+	usort(
+		$ranked,
+		function ( $a, $b ) {
+			return array( $b['completed'], $b['progress'], $b['enrolled'] ) <=> array( $a['completed'], $a['progress'], $a['enrolled'] );
+		}
+	);
+
+	return $ranked[0]['id'];
+}
+
+/**
+ * Magic Login leitet alle nach dem Login fest auf den Basic-Kurs (Einstellung der alten Seite).
+ * Partner, die schon eingeschrieben sind, stattdessen in ihren eigenen Kurs – sonst landen
+ * Partner aus dem Partner-Kurs im falschen Kurs und schreiben sich dort versehentlich ein.
+ */
+add_filter(
+	'magic_login_redirect',
+	function ( $redirect_to, $user ) {
+		// Support-Mitarbeiter auf die Einladungsseite statt in einen Kurs
+		if ( user_can( $user, VITARIGHTS_ONBOARDING_INVITE_CAP ) ) {
+			return home_url( '/' . VITARIGHTS_ONBOARDING_INVITE_PAGE . '/' );
+		}
+		$course_url = vitarights_onboarding_course_url( $user->ID );
+		if ( $course_url ) {
+			return $course_url;
+		}
+		// Noch kein Kurs: ungarische Nutzer in den ungarischen statt in den deutschen Basic-Kurs
+		if ( 'hu_HU' === get_user_locale( $user ) && isset( VITARIGHTS_ONBOARDING_COURSES[111037] ) ) {
+			return get_permalink( VITARIGHTS_ONBOARDING_COURSES[111037] );
+		}
+		return $redirect_to;
+	},
+	10000, // nach Magic Login selbst (9999, wenn „Weiterleitung erzwingen“ aktiv ist)
+	2
+);
+
+/**
+ * Die öffentlichen Registrierungsseiten (Fluent Forms 18/19/20) und /magic-login/ gibt es nicht
+ * mehr – Partner legt jetzt der Support an. Alte Links und Lesezeichen auf die Startseite.
+ * Vor redirect_canonical (Priorität 10), das sonst ähnlich klingende Seiten errät.
+ */
+add_action(
+	'template_redirect',
+	function () {
+		global $wp;
+		if ( ! is_404() ) {
+			return;
+		}
+		$removed = array(
+			'onboarding-login'         => '/',
+			'partner-onboarding-login' => '/',
+			'magic-login'              => '/',
+			'onboarding-login-meghivo' => '/' . VITARIGHTS_ONBOARDING_PAGES['start'] . '/',
+		);
+		$target = $removed[ trim( $wp->request, '/' ) ] ?? null;
+		if ( $target ) {
+			wp_safe_redirect( home_url( $target ), 301 );
+			exit;
+		}
+	},
+	5
+);
+
+add_action(
+	'template_redirect',
+	function () {
+		if ( ! is_user_logged_in() ) {
+			return;
+		}
+
+		// Die Magic-Link-Seiten sind nur für Gäste: Magic Login blendet sein Formular für
+		// Eingeloggte aus, die Seite wäre sonst leer. Eingeloggte landen in ihrem Kurs, der Support
+		// auf der Einladungsseite.
+		if ( is_page( array( 'partner-magic-login', 'magic-login-copy', 'magic-link' ) ) ) {
+			if ( current_user_can( VITARIGHTS_ONBOARDING_INVITE_CAP ) ) {
+				wp_safe_redirect( home_url( '/' . VITARIGHTS_ONBOARDING_INVITE_PAGE . '/' ) );
+				exit;
+			}
+			wp_safe_redirect( vitarights_onboarding_course_url() ?? home_url( '/' ) );
+			exit;
+		}
+
+		// Die Startseite ist eine Landingpage für Gäste; eingeschriebene Partner direkt ins Webinar.
+		// Ohne Einschreibung (z. B. Admins) bleibt es bei der Startseite.
+		if ( is_front_page() ) {
+			$course_url = vitarights_onboarding_course_url();
+			if ( $course_url ) {
+				wp_safe_redirect( $course_url );
+				exit;
+			}
+		}
+	}
+);
+
+/**
+ * Eigene Texte je Sprache aus languages/<locale>.php (de_DE, hu_HU). Deckt ab, was Tutor LMS 4,
+ * Tutor Pro (ohne deutsche/ungarische Übersetzung) und Magic Login (Du-Form) Partnern zeigen.
+ */
+function vitarights_onboarding_strings( $locale = null ) {
+	static $cache = array();
+	$locale = $locale ? $locale : determine_locale();
+	if ( ! isset( $cache[ $locale ] ) ) {
+		$file             = __DIR__ . '/languages/' . basename( $locale ) . '.php';
+		$cache[ $locale ] = is_readable( $file ) ? require $file : array();
+	}
+	return $cache[ $locale ];
+}
+
+add_filter(
+	'gettext',
+	function ( $translation, $text, $domain ) {
+		$strings = vitarights_onboarding_strings();
+		return $strings[ $domain ][ $text ] ?? $translation;
+	},
+	20,
+	3
+);
+
+add_filter(
+	'gettext_with_context',
+	function ( $translation, $text, $context, $domain ) {
+		$strings = vitarights_onboarding_strings();
+		return $strings[ $domain ][ $context . "\004" . $text ] ?? $translation;
+	},
+	20,
+	4
+);
+
+add_filter(
+	'ngettext',
+	function ( $translation, $single, $plural, $number, $domain ) {
+		$strings = vitarights_onboarding_strings();
+		$value   = $strings[ $domain ][ $single ] ?? null;
+		if ( is_array( $value ) ) {
+			return 1 === (int) $number ? $value[0] : $value[1];
+		}
+		return is_string( $value ) ? $value : $translation;
+	},
+	20,
+	5
+);
+
+/**
+ * Tutor-Pro-Mailvorlagen in der Sprache des Empfängers. Der Text („message“) ist in Tutor
+ * fest auf Englisch hinterlegt und erwartet JSON-kodierten Inhalt.
+ */
+function vitarights_onboarding_email_templates( $options, $locale ) {
+	$overrides = vitarights_onboarding_strings( $locale )['emails'] ?? array();
+	foreach ( $overrides as $to_key => $triggers ) {
+		foreach ( $triggers as $trigger => $fields ) {
+			if ( isset( $fields['message'] ) ) {
+				$fields['message'] = wp_json_encode( $fields['message'] );
+			}
+			$options[ $to_key ][ $trigger ] = array_merge( (array) ( $options[ $to_key ][ $trigger ] ?? array() ), $fields );
+		}
+	}
+	return $options;
+}
+
+add_filter(
+	'tutor_pro_user_email_template_option',
+	function ( $options, $recipient ) {
+		return vitarights_onboarding_email_templates( $options, get_user_locale( $recipient ) );
+	},
+	20,
+	2
+);
+
+add_filter(
+	'tutor_pro_email_template_data_option',
+	function ( $options ) {
+		return vitarights_onboarding_email_templates( $options, determine_locale() );
+	},
+	20
+);
+
+/**
+ * Tutors Rundgang („Your learning experience just got a whole lot better“) bewirbt Dashboard-
+ * Funktionen, die Partner hier nicht nutzen – für alle als bereits gesehen markieren.
+ */
+add_filter(
+	'get_user_metadata',
+	function ( $value, $object_id, $meta_key ) {
+		return '_tutor_tour_completed' === $meta_key ? array( 1 ) : $value;
+	},
+	10,
+	3
+);
+
+/**
+ * Tutor 4.0.9 gibt das „Failed“-Badge fehlerhaft ohne __() aus (Quiz_Attempts_List::
+ * render_quiz_attempt_list_badge) – auf Quiz-Seiten genau dieses Markup übersetzen.
+ */
+add_action(
+	'template_redirect',
+	function () {
+		if ( ! is_singular( 'tutor_quiz' ) ) {
+			return;
+		}
+		$label = array(
+			'de_DE' => 'Nicht bestanden',
+			'hu_HU' => 'Nem sikerült',
+		)[ determine_locale() ] ?? null;
+		if ( ! $label ) {
+			return;
+		}
+		ob_start(
+			function ( $html ) use ( $label ) {
+				return str_replace( 'tutor-badge-error tutor-badge-rounded">Failed<', 'tutor-badge-error tutor-badge-rounded">' . esc_html( $label ) . '<', $html );
+			}
+		);
+	}
+);
+
+/*
+ * ---------------------------------------------------------------------------------------------
+ * Sprachen DE/HU (ersetzt WPML der alten Seite)
+ *
+ * - Sprachspezifische Seiten und Kurse bestimmen die Sprache selbst (Tabellen unten).
+ * - Sonst gilt: eingeloggt → Profilsprache, Gast → Cookie „vr_lang“ (vom Umschalter), sonst Deutsch.
+ * - Der Umschalter [vitarights_lang_switch] führt zum Gegenstück der aktuellen Seite und merkt
+ *   sich die Wahl (Cookie bzw. Profilsprache).
+ * - Einladung in den ungarischen Kurs setzt die Profilsprache auf Ungarisch.
+ * ---------------------------------------------------------------------------------------------
+ */
+
+const VITARIGHTS_ONBOARDING_LANGS = array(
+	'de' => 'de_DE',
+	'hu' => 'hu_HU',
+);
+
+// Seiten-Gegenstücke: deutscher Slug => ungarischer Slug
+const VITARIGHTS_ONBOARDING_PAGES = array(
+	'start'               => 'kezdolap',
+	'partner-magic-login' => 'magic-link',
+	'magic-login-copy'    => 'magic-link',
+);
+
+// Kurs-Gegenstücke: deutscher Kurs => ungarischer Kurs (113247 = HU-Fassung von 111037)
+const VITARIGHTS_ONBOARDING_COURSES = array(
+	111037 => 113247,
+	111590 => 113247,
+);
+
+/**
+ * Kurs-ID eines Kurses, Themas, einer Lektion oder eines Tests (über die Eltern-Kette).
+ */
+function vitarights_onboarding_course_of( $post ) {
+	for ( $i = 0; $post && $i < 4; $i++ ) {
+		if ( 'courses' === $post->post_type ) {
+			return (int) $post->ID;
+		}
+		$post = $post->post_parent ? get_post( $post->post_parent ) : null;
+	}
+	return 0;
+}
+
+/**
+ * Feste Sprache eines Inhalts ('de'/'hu') oder null, wenn er sprachneutral ist.
+ */
+function vitarights_onboarding_content_lang( $post ) {
+	if ( ! $post instanceof WP_Post ) {
+		return null;
+	}
+	if ( 'page' === $post->post_type ) {
+		if ( in_array( $post->post_name, VITARIGHTS_ONBOARDING_PAGES, true ) ) {
+			return 'hu';
+		}
+		return isset( VITARIGHTS_ONBOARDING_PAGES[ $post->post_name ] ) ? 'de' : null;
+	}
+	$course = vitarights_onboarding_course_of( $post );
+	if ( in_array( $course, VITARIGHTS_ONBOARDING_COURSES, true ) ) {
+		return 'hu';
+	}
+	return isset( VITARIGHTS_ONBOARDING_COURSES[ $course ] ) ? 'de' : null;
+}
+
+/**
+ * Bevorzugte Sprache des Besuchers unabhängig von der aktuellen Seite.
+ */
+function vitarights_onboarding_preferred_lang() {
+	if ( is_user_logged_in() ) {
+		return 'hu_HU' === get_user_locale() ? 'hu' : 'de';
+	}
+	$cookie = sanitize_key( $_COOKIE['vr_lang'] ?? '' );
+	return isset( VITARIGHTS_ONBOARDING_LANGS[ $cookie ] ) ? $cookie : 'de';
+}
+
+function vitarights_onboarding_current_lang() {
+	return array_search( determine_locale(), VITARIGHTS_ONBOARDING_LANGS, true ) ?: 'de';
+}
+
+function vitarights_onboarding_switch_to( $lang ) {
+	$locale = VITARIGHTS_ONBOARDING_LANGS[ $lang ] ?? 'de_DE';
+	if ( get_locale() !== $locale ) {
+		switch_to_locale( $locale );
+	}
+}
+
+function vitarights_onboarding_remember_lang( $lang ) {
+	setcookie( 'vr_lang', $lang, time() + YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+	$_COOKIE['vr_lang'] = $lang;
+	if ( is_user_logged_in() ) {
+		update_user_meta( get_current_user_id(), 'locale', 'de' === $lang ? '' : VITARIGHTS_ONBOARDING_LANGS[ $lang ] );
+	}
+}
+
+// Umschalter-Klick (?vr_lang=hu): merken und ohne Parameter weiterleiten
+add_action(
+	'init',
+	function () {
+		$lang = sanitize_key( $_GET['vr_lang'] ?? '' );
+		if ( is_admin() || ! isset( VITARIGHTS_ONBOARDING_LANGS[ $lang ] ) ) {
+			return;
+		}
+		vitarights_onboarding_remember_lang( $lang );
+		wp_safe_redirect( remove_query_arg( 'vr_lang' ) );
+		exit;
+	},
+	0
+);
+
+// Früh (für alles vor der Abfrage, z. B. Formular-Verarbeitung): bevorzugte Sprache
+add_action(
+	'init',
+	function () {
+		if ( ! is_admin() ) {
+			vitarights_onboarding_switch_to( vitarights_onboarding_preferred_lang() );
+		}
+	},
+	1
+);
+
+// Nach der Abfrage: sprachspezifische Seiten/Kurse haben Vorrang; Gäste merken sich die Sprache
+add_action(
+	'wp',
+	function () {
+		if ( is_admin() ) {
+			return;
+		}
+		// Startseite: Gäste mit ungarischer Sprache auf die ungarische Startseite (vor dem Merken
+		// unten, sonst würde die deutsche Startseite die Wahl gleich wieder auf Deutsch setzen)
+		if ( is_front_page() && ! is_user_logged_in() && 'hu' === vitarights_onboarding_preferred_lang() ) {
+			wp_safe_redirect( home_url( '/' . VITARIGHTS_ONBOARDING_PAGES['start'] . '/' ) );
+			exit;
+		}
+		$lang = vitarights_onboarding_content_lang( get_queried_object() );
+		if ( $lang ) {
+			vitarights_onboarding_switch_to( $lang );
+			if ( ! is_user_logged_in() && vitarights_onboarding_preferred_lang() !== $lang ) {
+				vitarights_onboarding_remember_lang( $lang );
+			}
+		}
+	},
+	0
+);
+
+/**
+ * URL des Gegenstücks der aktuellen Seite in der Sprache $lang.
+ */
+function vitarights_onboarding_counterpart_url( $lang ) {
+	$post = get_queried_object();
+	$url  = null;
+
+	if ( $post instanceof WP_Post && 'page' === $post->post_type ) {
+		$slug = 'hu' === $lang
+			? ( VITARIGHTS_ONBOARDING_PAGES[ $post->post_name ] ?? null )
+			: array_search( $post->post_name, VITARIGHTS_ONBOARDING_PAGES, true );
+		if ( $slug ) {
+			$url = 'start' === $slug ? home_url( '/' ) : home_url( '/' . $slug . '/' );
+		}
+	} elseif ( $post instanceof WP_Post ) {
+		$course = vitarights_onboarding_course_of( $post );
+		$target = 'hu' === $lang
+			? ( VITARIGHTS_ONBOARDING_COURSES[ $course ] ?? 0 )
+			: array_search( $course, VITARIGHTS_ONBOARDING_COURSES, true );
+		if ( $target ) {
+			$url = get_permalink( $target );
+		}
+	}
+
+	if ( ! $url ) {
+		$url = 'hu' === $lang ? home_url( '/' . VITARIGHTS_ONBOARDING_PAGES['start'] . '/' ) : home_url( '/' );
+	}
+	return add_query_arg( 'vr_lang', $lang, $url );
+}
+
+add_shortcode(
+	'vitarights_lang_switch',
+	function () {
+		$current = vitarights_onboarding_current_lang();
+		$links   = array();
+		foreach ( array_keys( VITARIGHTS_ONBOARDING_LANGS ) as $lang ) {
+			$label   = strtoupper( $lang );
+			$links[] = $lang === $current
+				? '<span class="vr-lang__current" aria-current="true">' . esc_html( $label ) . '</span>'
+				: '<a href="' . esc_url( vitarights_onboarding_counterpart_url( $lang ) ) . '" hreflang="' . esc_attr( $lang ) . '" lang="' . esc_attr( $lang ) . '">' . esc_html( $label ) . '</a>';
+		}
+		return '<nav class="vr-lang" aria-label="Sprache / Nyelv">' . implode( '<span class="vr-lang__sep" aria-hidden="true">|</span>', $links ) . '</nav>';
+	}
+);
+
+add_action(
+	'wp_head',
+	function () {
+		echo '<style>'
+			// Sprachumschalter
+			. '.vr-lang{display:flex;gap:.5em;align-items:center;font-size:.9rem;letter-spacing:.05em}.vr-lang a{text-decoration:none;color:inherit;opacity:.6}.vr-lang a:hover{opacity:1}.vr-lang__current{font-weight:600}.vr-lang__sep{opacity:.35}'
+			// Startseite (scripts/front-page.php): Hero schließt an den Header an, Überzeile, Schritt-Nummern
+			. '.page-template-page-no-title main{margin-top:0!important;padding-top:0!important}'
+			. '.vr-eyebrow{margin:0;color:#253a7a;font-size:.8rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase}'
+			. '.vr-hero-image img{display:block;width:100%;height:auto;max-height:440px;object-fit:contain}'
+			. '.vr-step-title{font-weight:600}'
+			// Seitentitel im Kopfbereich im Blau des Signets
+			. 'header .wp-block-site-title a{color:#253a7a}'
+			// Nutzer-Buttons der Startseite (eigene Klassen, unabhängig von den Theme-Button-Stilen)
+			. '.vr-user-actions{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:var(--wp--preset--spacing--40)}'
+			. '.vr-btn{display:inline-block;padding:.95rem 2.1rem;border:2px solid #253a7a;border-radius:8px;font-size:1.05rem;line-height:1.2;text-decoration:none;transition:background-color .15s,color .15s}'
+			. '.vr-btn--primary{background:#253a7a;color:#fff}.vr-btn--primary:hover{background:#1b2c5e;border-color:#1b2c5e;color:#fff}'
+			. '.vr-btn--outline{background:transparent;color:#253a7a}.vr-btn--outline:hover{background:#253a7a;color:#fff}'
+			. '.vr-user-note{margin-top:1rem;color:#5b6275;font-size:.9rem}'
+			. '.vr-step-number{display:flex;align-items:center;justify-content:center;width:2.4rem;height:2.4rem;margin:0;border-radius:50%;background:#253a7a;color:#fff;font-weight:600}'
+			. '</style>';
+	}
+);
+
+// Magic Login: Betreff und Einladungsmail in der aktuellen Sprache (Deutsch steht in der DB)
+add_filter(
+	'option_magic_login_settings',
+	function ( $settings ) {
+		if ( ( is_admin() && ! wp_doing_ajax() ) || ! is_array( $settings ) ) {
+			return $settings;
+		}
+		$overrides = vitarights_onboarding_strings()['magic_login_settings'] ?? array();
+		return array_merge( $settings, $overrides );
+	}
+);
+
+/**
+ * Den „Login“-Eintrag der Kopfnavigation (→ /partner-magic-login/) nur Gästen zeigen.
+ */
+add_filter(
+	'render_block_core/navigation-link',
+	function ( $content, $block ) {
+		$url = $block['attrs']['url'] ?? '';
+		if ( false === strpos( $url, '/partner-magic-login/' ) ) {
+			return $content;
+		}
+		if ( is_user_logged_in() ) {
+			return '';
+		}
+		if ( 'hu' === vitarights_onboarding_current_lang() ) {
+			$content = str_replace( '/partner-magic-login/', '/' . VITARIGHTS_ONBOARDING_PAGES['partner-magic-login'] . '/', $content );
+			$content = str_replace( '>Login<', '>Bejelentkezés<', $content );
+		}
+		return $content;
+	},
+	10,
+	2
+);
+
+// Bleibt danach kein Eintrag übrig, die ganze Navigation weglassen – sonst zeigt sie mobil
+// einen Menü-Button, der ein leeres Menü öffnet
+add_filter(
+	'render_block_core/navigation',
+	function ( $content ) {
+		if ( is_user_logged_in() && false === strpos( $content, 'wp-block-navigation-item' ) ) {
+			return '';
+		}
+		return $content;
+	}
+);
+
+/**
+ * Footer wie auf vitarights.com (Firmensitz, Vertriebsniederlassung, Kontakt, Rechtliches) –
+ * als Shortcode, damit Überschriften und Linktexte der Sprache folgen. Die Rechtsseiten liegen
+ * auf vitarights.com (nur Deutsch).
+ */
+add_shortcode(
+	'vitarights_footer',
+	function () {
+		$l = 'hu' === vitarights_onboarding_current_lang()
+			? array( 'Székhely', 'Értékesítési iroda', 'Kapcsolat', 'Jogi információk', 'Impresszum', 'Adatvédelem', 'Cookie-szabályzat', 'Minden jog fenntartva.' )
+			: array( 'Firmensitz', 'Vertriebsniederlassung', 'Kontakt', 'Rechtliches', 'Impressum', 'Datenschutz', 'Cookie Richtlinien', 'All Rights Reserved.' );
+
+		$col = function ( $title, $body ) {
+			return '<div class="vr-footer__col"><h2 class="vr-footer__title">' . esc_html( $title ) . '</h2>' . $body . '</div>';
+		};
+
+		return '<div class="vr-footer"><div class="vr-footer__inner">'
+			. $col( $l[0], '<p>Vitarights Innovations GmbH<br>Bussardweg 3<br>41468 Neuss</p>' )
+			. $col( $l[1], '<p>Vitarights Innovations GmbH<br>Hertelsbrunnenring 2<br>67657 Kaiserslautern</p>' )
+			. $col( $l[2], '<p><a href="tel:+4921313878500">+49 2131 38785-0</a></p><p><a href="mailto:info@vitarights.de">info@vitarights.de</a></p>' )
+			. $col(
+				$l[3],
+				'<p><a href="https://vitarights.com/impressum/">' . esc_html( $l[4] ) . '</a></p>'
+				. '<p><a href="https://vitarights.com/datenschutzerklaerung/">' . esc_html( $l[5] ) . '</a></p>'
+				. '<p><a href="https://vitarights.com/cookie-richtlinie-eu/">' . esc_html( $l[6] ) . '</a></p>'
+			)
+			. '</div><div class="vr-footer__bar">© ' . esc_html( $l[7] ) . ' ' . gmdate( 'Y' ) . '</div></div>';
+	}
+);
+
+add_action(
+	'wp_head',
+	function () {
+		echo '<style>'
+			. '.vr-footer{background:#f7f4ee;color:#46506a}'
+			. '.vr-footer__inner{display:grid;grid-template-columns:repeat(4,1fr);gap:2rem;max-width:var(--wp--style--global--wide-size,1340px);margin:0 auto;padding:4rem var(--wp--style--root--padding-right,1.5rem) 3rem var(--wp--style--root--padding-left,1.5rem)}'
+			. '.vr-footer__title{margin:0 0 1.1rem;color:#1b2338;font-size:1rem;font-weight:600;letter-spacing:0}'
+			. '.vr-footer p{margin:0 0 .8rem;font-size:.95rem;line-height:1.6}'
+			. '.vr-footer a{color:inherit;text-decoration:none}.vr-footer a:hover{color:#253a7a;text-decoration:underline}'
+			. '.vr-footer__bar{background:#1b2338;color:#e8eaf0;text-align:center;padding:.9rem 1rem;font-size:.85rem;letter-spacing:.06em}'
+			. '@media (max-width:900px){.vr-footer__inner{grid-template-columns:repeat(2,1fr)}}'
+			. '@media (max-width:520px){.vr-footer__inner{grid-template-columns:1fr;padding-top:2.5rem}}'
+			. '</style>';
+	}
+);
+
+/**
+ * Startseite für Eingeloggte: Gast-Buttons (Login-Link) ausblenden – die führen eingeloggt ins
+ * Leere – und stattdessen „Zum Webinar“ (Support: „Partner einladen“) / „Abmelden“ zeigen.
+ */
+add_filter(
+	'render_block',
+	function ( $content, $block ) {
+		$class = $block['attrs']['className'] ?? '';
+		if ( is_user_logged_in() && false !== strpos( $class, 'vr-guest-only' ) ) {
+			return '';
+		}
+		return $content;
+	},
+	10,
+	2
+);
+
+add_shortcode(
+	'vitarights_user_actions',
+	function () {
+		if ( ! is_user_logged_in() ) {
+			return '';
+		}
+		$hu    = 'hu' === vitarights_onboarding_current_lang();
+		$l     = $hu
+			? array( 'Tovább a webináriumhoz', 'Kijelentkezés', 'Bejelentkezve mint %s.' )
+			: array( 'Zum Webinar', 'Abmelden', 'Angemeldet als %s.' );
+		$course = vitarights_onboarding_course_url() ?? get_permalink( $hu ? VITARIGHTS_ONBOARDING_COURSES[111037] : 111037 );
+		$logout = wp_logout_url( home_url( $hu ? '/' . VITARIGHTS_ONBOARDING_PAGES['start'] . '/' : '/' ) );
+		if ( current_user_can( VITARIGHTS_ONBOARDING_INVITE_CAP ) ) {
+			$course = home_url( '/' . VITARIGHTS_ONBOARDING_INVITE_PAGE . '/' );
+			$l[0]   = 'Partner einladen';
+		}
+
+		return '<div class="vr-user-actions">'
+			. '<a class="vr-btn vr-btn--primary" href="' . esc_url( $course ) . '">' . esc_html( $l[0] ) . '</a>'
+			. '<a class="vr-btn vr-btn--outline" href="' . esc_url( $logout ) . '">' . esc_html( $l[1] ) . '</a>'
+			. '</div><p class="vr-user-note">' . esc_html( sprintf( $l[2], wp_get_current_user()->display_name ) ) . '</p>';
+	}
+);
+
+/**
+ * {{EXPIRES_WITH_INTERVAL}} in den Login-Mails: Magic Login macht daraus „14 tag(e)“ bzw. auf
+ * Ungarisch „14 day(s)“ – hier sprachlich korrekt aus der eingestellten Laufzeit.
+ */
+add_filter(
+	'magic_login_email_placeholders',
+	function ( $placeholders ) {
+		$settings = get_option( 'magic_login_settings' );
+		$minutes  = (int) ( $settings['token_ttl'] ?? 0 );
+		if ( $minutes <= 0 ) {
+			return $placeholders;
+		}
+
+		if ( 0 === $minutes % 1440 ) {
+			$n    = $minutes / 1440;
+			$unit = array( 'de' => array( 'Tag', 'Tage' ), 'hu' => array( 'nap', 'nap' ) );
+		} elseif ( 0 === $minutes % 60 ) {
+			$n    = $minutes / 60;
+			$unit = array( 'de' => array( 'Stunde', 'Stunden' ), 'hu' => array( 'óra', 'óra' ) );
+		} else {
+			$n    = $minutes;
+			$unit = array( 'de' => array( 'Minute', 'Minuten' ), 'hu' => array( 'perc', 'perc' ) );
+		}
+		$lang = vitarights_onboarding_current_lang();
+		$placeholders['{{EXPIRES_WITH_INTERVAL}}'] = $n . ' ' . $unit[ $lang ][ 1 === $n ? 0 : 1 ];
+
+		return $placeholders;
+	}
+);
