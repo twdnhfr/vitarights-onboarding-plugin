@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vitarights Onboarding
  * Description: Kleine Anpassungen für das Partner-Onboarding (Tutor LMS + Magic Login).
- * Version:     1.7.0
+ * Version:     1.7.1
  * Author:      Vitarights
  * Update URI:  https://github.com/twdnhfr/vitarights-onboarding-plugin
  * License:     GPL-2.0-or-later
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Muss zur Version im Kopf passen (make release prüft das)
-const VITARIGHTS_ONBOARDING_VERSION = '1.7.0';
+const VITARIGHTS_ONBOARDING_VERSION = '1.7.1';
 const VITARIGHTS_ONBOARDING_FILE    = __FILE__;
 
 require __DIR__ . '/partner-invite.php';
@@ -529,6 +529,10 @@ add_action(
 		echo '<style>'
 			// Sprachumschalter
 			. '.vr-lang{display:flex;gap:.5em;align-items:center;font-size:.9rem;letter-spacing:.05em}.vr-lang a{text-decoration:none;color:inherit;opacity:.6}.vr-lang a:hover{opacity:1}.vr-lang__current{font-weight:600}.vr-lang__sep{opacity:.35}'
+			// Kursbild auf der Kursseite: fester 3:2-Rahmen (Format des deutschen Kursbilds), andere
+			// Formate (z. B. das hochkante Produktbild der EN/FR-Kurse) eingepasst statt in voller Höhe
+			. '.tutor-course-thumbnail{aspect-ratio:3/2;background:#f3f5fa;overflow:hidden}'
+			. '.tutor-course-thumbnail img{display:block;width:100%;height:100%;object-fit:contain}'
 			// Startseite (scripts/front-page.php): Hero schließt an den Header an, Überzeile, Schritt-Nummern
 			. '.page-template-page-no-title main{margin-top:0!important;padding-top:0!important}'
 			. '.vr-eyebrow{margin:0;color:#253a7a;font-size:.8rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase}'
