@@ -2,11 +2,11 @@
 /**
  * Partner einladen: Der Vitarights-Support legt neue Partner auf /partner-einladen/ an (ersetzt die
  * öffentliche Registrierung über Fluent Forms). Pro Einladung: Abonnent anlegen, Sprache aus dem
- * Kurs setzen, im Kurs einschreiben, Einladungsmail mit Magic Link schicken. Darunter eine
- * Übersicht aller Partner mit Status und „Link erneut senden“.
+ * Kurs setzen, im Kurs einschreiben, Einladungsmail mit Magic Link schicken. Die Übersicht aller
+ * Partner (Status, Filter, Export) ist die Admin-Seite „Partner“ (partner-admin.php), hier verlinkt.
  *
  * Zugriff hat, wer das Recht vr_invite_partners hat: Rolle „Onboarding-Support“ und Admins
- * (angelegt von scripts/setup-onboarding.sh). Die Seite ist nur auf Deutsch.
+ * (angelegt von upgrade.php). Die Seite ist nur auf Deutsch.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 const VITARIGHTS_ONBOARDING_INVITE_CAP  = 'vr_invite_partners';
 const VITARIGHTS_ONBOARDING_INVITE_PAGE = 'partner-einladen';
 
-// Status-Marken (Frontend-Übersicht und Admin-Liste)
+// Status-Marken der Admin-Liste
 const VITARIGHTS_ONBOARDING_STATUS_CSS = '.vr-status{display:inline-block;padding:.2rem .6rem;border-radius:999px;font-size:.85rem;line-height:1.5;white-space:nowrap}'
 	. '.vr-status--done{background:#e3f2e8;color:#1e5c34}.vr-status--progress,.vr-status--login{background:#e8ecf7;color:#253a7a}'
 	. '.vr-status--open{background:#fdf3e1;color:#7a4b00}.vr-status--none{background:#eee;color:#555}';
@@ -53,9 +53,12 @@ function vitarights_onboarding_send_invite( WP_User $user ) {
 	if ( did_action( 'magic_login_send_login_link' ) ) {
 		return false;
 	}
-	switch_to_user_locale( $user->ID );
-	$sent = \MagicLogin\LoginManager::send_login_link( $user );
-	restore_previous_locale();
+	// Nur zurückschalten, wenn wirklich umgeschaltet wurde (sonst ginge eine äußere Umschaltung verloren)
+	$switched = switch_to_locale( vitarights_onboarding_user_locale( $user ) );
+	$sent     = \MagicLogin\LoginManager::send_login_link( $user );
+	if ( $switched ) {
+		restore_previous_locale();
+	}
 
 	if ( $sent ) {
 		update_user_meta( $user->ID, 'vr_invited_at', time() );
@@ -131,7 +134,7 @@ const VITARIGHTS_ONBOARDING_STATUSES = array(
 
 /**
  * Alle Partner (Abonnenten) mit Kurs, Status und Einladungsdaten – in wenigen gesammelten Abfragen,
- * damit Übersicht, Admin-Liste und CSV-Export auch bei ~1.000 Partnern filtern und sortieren können.
+ * damit Admin-Liste und CSV-Export auch bei ~1.000 Partnern filtern und sortieren können.
  * Den Fortschritt in % rechnet Tutor je Partner einzeln, deshalb nur für angezeigte Zeilen
  * (vitarights_onboarding_status_label()).
  *
@@ -337,23 +340,6 @@ add_action(
 			exit;
 		}
 
-		if ( isset( $_POST['vr_resend'] ) ) {
-			$user_id = absint( $_POST['vr_resend'] );
-			check_admin_referer( 'vr_resend_' . $user_id );
-			$user = get_user_by( 'id', $user_id );
-			if ( ! $user || ! in_array( 'subscriber', $user->roles, true ) ) {
-				$GLOBALS['vitarights_onboarding_invite_error'] = 'Diesen Partner gibt es nicht.';
-				return;
-			}
-			if ( ! vitarights_onboarding_send_invite( $user ) ) {
-				$GLOBALS['vitarights_onboarding_invite_error'] = 'Die Mail an ' . $user->user_email . ' konnte nicht verschickt werden.';
-				return;
-			}
-			// Suche und Seite der Übersicht beibehalten
-			$back = wp_get_referer() ? wp_get_referer() : $page;
-			wp_safe_redirect( add_query_arg( array( 'vr_done' => 'resent', 'vr_user' => $user_id ), remove_query_arg( array( 'vr_done', 'vr_user' ), $back ) ) );
-			exit;
-		}
 	}
 );
 
@@ -399,46 +385,11 @@ add_shortcode(
 			. '<p class="vr-invite__wide vr-invite__hint">Der Partner wird im gewählten Kurs eingeschrieben und erhält eine E-Mail mit seinem persönlichen Login-Link – in der Sprache des Kurses. Gibt es die E-Mail-Adresse schon, wird nur zusätzlich eingeschrieben und ein neuer Link verschickt.</p>'
 			. '</form>';
 
-		// Übersicht
-		$search = sanitize_text_field( wp_unslash( $_GET['q'] ?? '' ) );
-		$paged  = max( 1, absint( $_GET['seite'] ?? 1 ) );
-		$rows   = vitarights_onboarding_filter_partners( vitarights_onboarding_partners(), array( 'search' => $search ) );
-		$total  = count( $rows );
-
-		$html .= '<h2 class="vr-invite__title">Partner</h2>'
-			. '<form class="vr-invite__search" method="get" action="' . esc_url( $page ) . '">'
-			. '<input type="search" name="q" placeholder="Name oder E-Mail" aria-label="Partner suchen" value="' . esc_attr( $search ) . '">'
-			. '<button class="vr-btn vr-btn--outline" type="submit">Suchen</button>'
-			. ( '' !== $search ? '<a href="' . esc_url( $page ) . '">Zurücksetzen</a>' : '' )
-			. '</form>';
-
-		if ( ! $total ) {
-			return $html . '<p>' . ( '' !== $search ? 'Kein Partner gefunden.' : 'Noch keine Partner angelegt.' ) . '</p></div>';
-		}
-
-		$html .= '<table class="vr-invite__table"><thead><tr><th>Partner</th><th>Kurs</th><th>Status</th></tr></thead><tbody>';
-		foreach ( array_slice( $rows, ( $paged - 1 ) * 25, 25 ) as $row ) {
-			$html .= '<tr>'
-				. '<td data-label="Partner"><strong>' . esc_html( $row['name'] ) . '</strong><br><small>' . esc_html( $row['email'] ) . '</small></td>'
-				. '<td data-label="Kurs">' . ( $row['course'] ? esc_html( vitarights_onboarding_course_label( $row['course'] ) ) : '–' ) . '<br><small>' . esc_html( vitarights_onboarding_invited_label( $row ) ) . '</small></td>'
-				. '<td data-label="Status">' . vitarights_onboarding_status_badge( $row )
-				. '<form method="post" action="' . esc_url( $page ) . '">' . wp_nonce_field( 'vr_resend_' . $row['id'], '_wpnonce', true, false )
-				. '<button class="vr-link-btn" type="submit" name="vr_resend" value="' . $row['id'] . '">Link erneut senden</button></form></td>'
-				. '</tr>';
-		}
-		$html .= '</tbody></table>';
-
-		$pages = (int) ceil( $total / 25 );
-		if ( $pages > 1 ) {
-			$link  = function ( $n ) use ( $page, $search ) {
-				return esc_url( add_query_arg( array_filter( array( 'q' => $search, 'seite' => $n > 1 ? $n : null ) ), $page ) );
-			};
-			$html .= '<nav class="vr-invite__pages">'
-				. ( $paged > 1 ? '<a href="' . $link( $paged - 1 ) . '">← Zurück</a>' : '<span></span>' )
-				. '<span>Seite ' . $paged . ' von ' . $pages . ' · ' . $total . ' Partner</span>'
-				. ( $paged < $pages ? '<a href="' . $link( $paged + 1 ) . '">Weiter →</a>' : '<span></span>' )
-				. '</nav>';
-		}
+		// Übersicht mit Status, Filtern, Suche und Export gibt es im Backend (partner-admin.php)
+		$html .= '<div class="vr-invite__overview">'
+			. '<p><strong>Alle Partner im Überblick</strong><br>Status, Fortschritt, Filter, Suche, „Link erneut senden“ und CSV-Export.</p>'
+			. '<a class="vr-btn vr-btn--outline" href="' . esc_url( vitarights_onboarding_admin_url() ) . '">Zur Partner-Übersicht</a>'
+			. '</div>';
 
 		return $html . '</div>';
 	}
@@ -460,19 +411,10 @@ add_action(
 			. '.vr-invite input,.vr-invite select{width:100%;box-sizing:border-box;padding:.7rem .8rem;border:1px solid #b9c0d4;border-radius:8px;font:inherit;background:#fff}'
 			. '.vr-invite__hint{margin:0!important;color:var(--vr-muted);font-size:.9rem}'
 			. '.vr-invite__field-hint{display:block;margin-top:.35rem;color:var(--vr-muted);font-size:.85rem}'
-			. '.vr-invite__title{margin-bottom:1rem}'
-			. '.vr-invite__search{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;margin-bottom:1.25rem}.vr-invite__search input{flex:1 1 16rem;width:auto}.vr-invite__search .vr-btn{padding:.7rem 1.4rem}'
-			. '.vr-invite__table{width:100%;border-collapse:collapse;font-size:.95rem}'
-			. '.vr-invite__table th{text-align:left;font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--vr-muted);border-bottom:2px solid var(--vr-line);padding:.6rem .5rem}'
-			. '.vr-invite__table td{border-bottom:1px solid var(--vr-line);padding:.75rem .5rem;vertical-align:top}'
-			. '.vr-invite__table small{color:var(--vr-muted);overflow-wrap:anywhere}'
-			. '.vr-invite__table td form{margin-top:.4rem}.vr-invite__table .vr-link-btn{font-size:.85rem}'
-			. VITARIGHTS_ONBOARDING_STATUS_CSS
-			. '.vr-link-btn{background:none;border:0;padding:0;color:var(--vr-blue);font:inherit;text-decoration:underline;cursor:pointer;white-space:nowrap}'
-			. '.vr-invite__pages{display:flex;justify-content:space-between;gap:1rem;margin-top:1.25rem;font-size:.9rem}'
-			. '@media (max-width:700px){.vr-invite__form{grid-template-columns:1fr;padding:1rem}'
-			. '.vr-invite__table thead{display:none}.vr-invite__table tr{display:block;padding:.75rem 0;border-bottom:1px solid var(--vr-line)}'
-			. '.vr-invite__table td{display:block;border:0;padding:.2rem 0}.vr-invite__table td[data-label]:not([data-label="Partner"])::before{content:attr(data-label) ": ";color:var(--vr-muted);font-size:.85rem}}'
+			. '.vr-invite__overview{display:flex;flex-wrap:wrap;gap:1rem 1.5rem;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem;border-radius:14px;background:#f3f5fa}'
+			. '.vr-invite__overview p{margin:0;color:var(--vr-muted);font-size:.95rem}.vr-invite__overview strong{color:#1b2338}'
+			. '.vr-invite__overview .vr-btn{padding:.7rem 1.4rem}'
+			. '@media (max-width:700px){.vr-invite__form{grid-template-columns:1fr;padding:1rem}}'
 			. '</style>';
 	}
 );

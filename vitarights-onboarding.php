@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vitarights Onboarding
  * Description: Kleine Anpassungen für das Partner-Onboarding (Tutor LMS + Magic Login).
- * Version:     1.7.1
+ * Version:     1.7.2
  * Author:      Vitarights
  * Update URI:  https://github.com/twdnhfr/vitarights-onboarding-plugin
  * License:     GPL-2.0-or-later
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Muss zur Version im Kopf passen (make release prüft das)
-const VITARIGHTS_ONBOARDING_VERSION = '1.7.1';
+const VITARIGHTS_ONBOARDING_VERSION = '1.7.2';
 const VITARIGHTS_ONBOARDING_FILE    = __FILE__;
 
 require __DIR__ . '/partner-invite.php';
@@ -79,7 +79,7 @@ add_filter(
 			return $course_url;
 		}
 		// Noch kein Kurs: Nutzer anderer Sprachen in den Standardkurs ihrer Sprache statt in den deutschen
-		$lang   = vitarights_onboarding_locale_lang( get_user_locale( $user ) );
+		$lang   = vitarights_onboarding_locale_lang( vitarights_onboarding_user_locale( $user ) );
 		$course = 'de' === $lang ? null : vitarights_onboarding_lang_course( $lang );
 		return $course ? get_permalink( $course ) : $redirect_to;
 	},
@@ -213,7 +213,7 @@ function vitarights_onboarding_email_templates( $options, $locale ) {
 add_filter(
 	'tutor_pro_user_email_template_option',
 	function ( $options, $recipient ) {
-		return vitarights_onboarding_email_templates( $options, get_user_locale( $recipient ) );
+		return vitarights_onboarding_email_templates( $options, vitarights_onboarding_user_locale( $recipient ) );
 	},
 	20,
 	2
@@ -356,6 +356,17 @@ function vitarights_onboarding_course_lang( $course_id ) {
 	return null;
 }
 
+/**
+ * Locale eines Benutzers. Anders als get_user_locale() fällt ein leeres Profil (= Website-Sprache)
+ * auf die Website-Sprache zurück und nicht auf die gerade aktive Sprache – sonst bekäme z. B. ein
+ * deutscher Partner die Einladung in der Sprache dessen, der gerade einlädt.
+ */
+function vitarights_onboarding_user_locale( $user ) {
+	$user_id = $user instanceof WP_User ? $user->ID : (int) $user;
+	$locale  = $user_id ? get_user_meta( $user_id, 'locale', true ) : '';
+	return $locale ? $locale : ( get_option( 'WPLANG' ) ?: 'en_US' );
+}
+
 function vitarights_onboarding_locale_lang( $locale ) {
 	return array_search( $locale, VITARIGHTS_ONBOARDING_LANGS, true ) ?: 'de';
 }
@@ -409,7 +420,7 @@ function vitarights_onboarding_content_lang( $post ) {
  */
 function vitarights_onboarding_preferred_lang() {
 	if ( is_user_logged_in() ) {
-		return vitarights_onboarding_locale_lang( get_user_locale() );
+		return vitarights_onboarding_locale_lang( vitarights_onboarding_user_locale( get_current_user_id() ) );
 	}
 	$cookie = sanitize_key( $_COOKIE['vr_lang'] ?? '' );
 	return isset( VITARIGHTS_ONBOARDING_LANGS[ $cookie ] ) ? $cookie : 'de';
