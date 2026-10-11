@@ -11,10 +11,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 const VITARIGHTS_ONBOARDING_ADMIN_PAGE = 'vr-partner';
-const VITARIGHTS_ONBOARDING_LANG_LABELS = array(
-	'de' => 'Deutsch',
-	'hu' => 'Ungarisch',
-);
 
 add_action(
 	'admin_menu',
@@ -182,14 +178,14 @@ function vitarights_onboarding_admin_add() {
 	$val   = function ( $key ) use ( $error ) {
 		return $error ? sanitize_text_field( wp_unslash( $_POST[ $key ] ?? '' ) ) : '';
 	};
-	$selected = $error ? absint( $_POST['course'] ?? 0 ) : VITARIGHTS_ONBOARDING_INVITE_COURSES[0];
+	$selected = $error ? absint( $_POST['course'] ?? 0 ) : vitarights_onboarding_invite_courses()[0];
 	?>
 	<div class="wrap">
 		<h1>Partner hinzufügen</h1>
 		<?php if ( $error ) : ?>
 			<div class="notice notice-error"><p><?php echo esc_html( $error ); ?></p></div>
 		<?php endif; ?>
-		<p>Der Partner wird im gewählten Kurs eingeschrieben und erhält eine E-Mail mit seinem persönlichen Login-Link, beim ungarischen Kurs auf Ungarisch. Gibt es die E-Mail-Adresse schon, wird er zusätzlich eingeschrieben und bekommt einen neuen Link.</p>
+		<p>Der Partner wird im gewählten Kurs eingeschrieben und erhält eine E-Mail mit seinem persönlichen Login-Link, in der Sprache des Kurses. Gibt es die E-Mail-Adresse schon, wird er zusätzlich eingeschrieben und bekommt einen neuen Link.</p>
 		<form method="post">
 			<?php wp_nonce_field( 'vr_invite' ); ?>
 			<table class="form-table" role="presentation">
@@ -209,7 +205,7 @@ function vitarights_onboarding_admin_add() {
 					<th scope="row"><label for="vr-course">Kurs</label></th>
 					<td>
 						<select id="vr-course" name="course">
-							<?php foreach ( VITARIGHTS_ONBOARDING_INVITE_COURSES as $course_id ) : ?>
+							<?php foreach ( vitarights_onboarding_invite_courses() as $course_id ) : ?>
 								<option value="<?php echo (int) $course_id; ?>" <?php selected( $selected, $course_id ); ?>><?php echo esc_html( vitarights_onboarding_course_label( $course_id ) ); ?></option>
 							<?php endforeach; ?>
 						</select>

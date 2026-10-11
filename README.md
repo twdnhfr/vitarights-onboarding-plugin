@@ -2,7 +2,7 @@
 
 Plugin für das Vitarights-Partner-Onboarding (Tutor LMS + Magic Login): Partner einladen
 (`/partner-einladen/` und Admin-Seite „Partner“), Partnerübersicht mit CSV-Export, Weiterleitungen
-nach dem Login, Sprachen DE/HU, Texte und Mails.
+nach dem Login, Sprachen DE/HU/EN/FR, Texte und Mails.
 
 Das Projekt drumherum (Docker, Deploy, Setup-Skripte, Doku) liegt in einem separaten, privaten
 Repo; dort ist dieses Repo als Submodul unter `plugin/vitarights-onboarding` eingebunden.

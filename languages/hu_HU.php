@@ -157,10 +157,31 @@ return array(
 		'Hour(s)'                                           => 'óra',
 		'Day(s)'                                            => 'nap',
 		'There is no account with that username or email address.' => 'Ezzel az e-mail-címmel nem található fiók.',
-		'Invalid magic login token. <a href="%s">Try signing in instead</a>?' => 'Ez a bejelentkezési link érvénytelen vagy lejárt. <a href="/partner-magic-login/">Új bejelentkezési link kérése</a>',
-		'Invalid magic login token. Please try to create <a href="%s">a new login link</a>?' => 'Ez a bejelentkezési link érvénytelen vagy lejárt. Kérjen <a href="/partner-magic-login/">új bejelentkezési linket</a>.',
+		'Invalid magic login token. <a href="%s">Try signing in instead</a>?' => 'Ez a bejelentkezési link érvénytelen vagy lejárt. <a href="/magic-link/">Új bejelentkezési link kérése</a>',
+		'Invalid magic login token. Please try to create <a href="%s">a new login link</a>?' => 'Ez a bejelentkezési link érvénytelen vagy lejárt. Kérjen <a href="/magic-link/">új bejelentkezési linket</a>.',
 	),
 
+
+	// Eigene Texte des Plugins (deutsch im Code)
+	'vitarights-onboarding'         => array(
+		'Nicht bestanden'                                   => 'Nem sikerült',
+		'Sprache'                                           => 'Nyelv',
+		'Login'                                             => 'Bejelentkezés',
+		'Firmensitz'                                        => 'Székhely',
+		'Vertriebsniederlassung'                            => 'Értékesítési iroda',
+		'Kontakt'                                           => 'Kapcsolat',
+		'Rechtliches'                                       => 'Jogi információk',
+		'Impressum'                                         => 'Impresszum',
+		'Datenschutz'                                       => 'Adatvédelem',
+		'Cookie Richtlinien'                                => 'Cookie-szabályzat',
+		'All Rights Reserved.'                              => 'Minden jog fenntartva.',
+		'Zum Webinar'                                       => 'Tovább a webináriumhoz',
+		'Abmelden'                                          => 'Kijelentkezés',
+		'Angemeldet als %s.'                                => 'Bejelentkezve mint %s.',
+		'%d Tag'                                            => array( '%d nap', '%d nap' ),
+		'%d Stunde'                                         => array( '%d óra', '%d óra' ),
+		'%d Minute'                                         => array( '%d perc', '%d perc' ),
+	),
 
 	'emails'                        => array(
 		'email_to_students' => array(

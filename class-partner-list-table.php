@@ -101,7 +101,7 @@ class Vitarights_Onboarding_Partner_List_Table extends WP_List_Table {
 		echo '<div class="alignleft actions">';
 		echo '<label for="vr-filter-course" class="screen-reader-text">Nach Kurs filtern</label>';
 		echo '<select name="course" id="vr-filter-course"><option value="">Alle Kurse</option>';
-		foreach ( VITARIGHTS_ONBOARDING_INVITE_COURSES as $course_id ) {
+		foreach ( vitarights_onboarding_invite_courses() as $course_id ) {
 			printf( '<option value="%d"%s>%s</option>', (int) $course_id, selected( $args['course'], $course_id, false ), esc_html( vitarights_onboarding_course_label( $course_id ) ) );
 		}
 		echo '</select>';

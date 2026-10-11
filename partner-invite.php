@@ -21,12 +21,17 @@ const VITARIGHTS_ONBOARDING_STATUS_CSS = '.vr-status{display:inline-block;paddin
 	. '.vr-status--done{background:#e3f2e8;color:#1e5c34}.vr-status--progress,.vr-status--login{background:#e8ecf7;color:#253a7a}'
 	. '.vr-status--open{background:#fdf3e1;color:#7a4b00}.vr-status--none{background:#eee;color:#555}';
 
-// Kurse zur Auswahl, der erste ist vorausgewählt. Die Sprache ergibt sich aus dem Kurs.
-const VITARIGHTS_ONBOARDING_INVITE_COURSES = array( 111590, 111037, 113247 );
+/**
+ * Kurse zur Auswahl: alle Kurse aller Sprachen (VITARIGHTS_ONBOARDING_COURSES), der erste ist
+ * vorausgewählt. Die Sprache ergibt sich aus dem Kurs.
+ */
+function vitarights_onboarding_invite_courses() {
+	return array_merge( ...array_values( vitarights_onboarding_courses() ) );
+}
 
 function vitarights_onboarding_course_label( $course_id ) {
-	$lang = vitarights_onboarding_content_lang( get_post( $course_id ) );
-	return get_the_title( $course_id ) . ( 'hu' === $lang ? ' (Ungarisch)' : ' (Deutsch)' );
+	$lang = vitarights_onboarding_course_lang( $course_id ) ?? 'de';
+	return get_the_title( $course_id ) . ' (' . VITARIGHTS_ONBOARDING_LANG_LABELS[ $lang ] . ')';
 }
 
 // Letzter Login – für den Status „noch nicht eingeloggt“ in der Übersicht
@@ -71,7 +76,7 @@ function vitarights_onboarding_invite_partner( $first_name, $last_name, $email, 
 	if ( ! is_email( $email ) ) {
 		return new WP_Error( 'email', 'Bitte eine gültige E-Mail-Adresse eintragen.' );
 	}
-	if ( ! in_array( $course_id, VITARIGHTS_ONBOARDING_INVITE_COURSES, true ) ) {
+	if ( ! in_array( $course_id, vitarights_onboarding_invite_courses(), true ) ) {
 		return new WP_Error( 'course', 'Bitte einen Kurs auswählen.' );
 	}
 
@@ -99,8 +104,8 @@ function vitarights_onboarding_invite_partner( $first_name, $last_name, $email, 
 		$status = 'created';
 	}
 
-	$lang = vitarights_onboarding_content_lang( get_post( $course_id ) );
-	update_user_meta( $user->ID, 'locale', 'hu' === $lang ? VITARIGHTS_ONBOARDING_LANGS['hu'] : '' );
+	$lang = vitarights_onboarding_course_lang( $course_id );
+	update_user_meta( $user->ID, 'locale', 'de' === $lang ? '' : VITARIGHTS_ONBOARDING_LANGS[ $lang ] );
 
 	if ( ! \Tutor\Models\EnrollmentModel::do_enroll( $course_id, 0, $user->ID ) ) {
 		return new WP_Error( 'enroll', 'Der Partner wurde angelegt, konnte aber nicht in den Kurs eingeschrieben werden.' );
@@ -206,7 +211,7 @@ function vitarights_onboarding_partners() {
 			'email'        => $user->user_email,
 			'registered'   => strtotime( $user->user_registered . ' UTC' ),
 			'course'       => $course,
-			'lang'         => 'hu_HU' === ( $m['locale'] ?? '' ) ? 'hu' : 'de',
+			'lang'         => vitarights_onboarding_locale_lang( $m['locale'] ?? '' ),
 			'invited_at'   => (int) ( $m['vr_invited_at'] ?? 0 ),
 			'invited_by'   => (int) ( $m['vr_invited_by'] ?? 0 ),
 			'last_login'   => (int) ( $m['vr_last_login'] ?? 0 ),
@@ -378,9 +383,9 @@ add_shortcode(
 		$val      = function ( $key ) use ( $error ) {
 			return $error ? sanitize_text_field( wp_unslash( $_POST[ $key ] ?? '' ) ) : '';
 		};
-		$selected = $error ? absint( $_POST['course'] ?? 0 ) : VITARIGHTS_ONBOARDING_INVITE_COURSES[0];
+		$selected = $error ? absint( $_POST['course'] ?? 0 ) : vitarights_onboarding_invite_courses()[0];
 		$options  = '';
-		foreach ( VITARIGHTS_ONBOARDING_INVITE_COURSES as $course_id ) {
+		foreach ( vitarights_onboarding_invite_courses() as $course_id ) {
 			$options .= '<option value="' . $course_id . '"' . selected( $selected, $course_id, false ) . '>' . esc_html( vitarights_onboarding_course_label( $course_id ) ) . '</option>';
 		}
 		$html .= '<form class="vr-invite__form" method="post" action="' . esc_url( $page ) . '">'
@@ -391,7 +396,7 @@ add_shortcode(
 			. '<p class="vr-invite__wide"><label for="vr-course">Kurs</label><select id="vr-course" name="course" aria-describedby="vr-course-hint">' . $options . '</select>'
 			. '<small id="vr-course-hint" class="vr-invite__field-hint">Bestimmt auch die Sprache von Einladungsmail und Oberfläche.</small></p>'
 			. '<p class="vr-invite__wide"><button class="vr-btn vr-btn--primary" type="submit" name="vr_invite" value="1">Einladung senden</button></p>'
-			. '<p class="vr-invite__wide vr-invite__hint">Der Partner wird im gewählten Kurs eingeschrieben und erhält eine E-Mail mit seinem persönlichen Login-Link – beim ungarischen Kurs auf Ungarisch. Gibt es die E-Mail-Adresse schon, wird nur zusätzlich eingeschrieben und ein neuer Link verschickt.</p>'
+			. '<p class="vr-invite__wide vr-invite__hint">Der Partner wird im gewählten Kurs eingeschrieben und erhält eine E-Mail mit seinem persönlichen Login-Link – in der Sprache des Kurses. Gibt es die E-Mail-Adresse schon, wird nur zusätzlich eingeschrieben und ein neuer Link verschickt.</p>'
 			. '</form>';
 
 		// Übersicht
