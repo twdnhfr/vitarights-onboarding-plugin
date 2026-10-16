@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vitarights Onboarding
  * Description: Kleine Anpassungen für das Partner-Onboarding (Tutor LMS + Magic Login).
- * Version:     1.7.3
+ * Version:     1.7.4
  * Author:      Vitarights
  * Update URI:  https://github.com/twdnhfr/vitarights-onboarding-plugin
  * License:     GPL-2.0-or-later
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Muss zur Version im Kopf passen (make release prüft das)
-const VITARIGHTS_ONBOARDING_VERSION = '1.7.3';
+const VITARIGHTS_ONBOARDING_VERSION = '1.7.4';
 const VITARIGHTS_ONBOARDING_FILE    = __FILE__;
 
 require __DIR__ . '/partner-invite.php';
@@ -225,6 +225,56 @@ add_filter(
 		return vitarights_onboarding_email_templates( $options, determine_locale() );
 	},
 	20
+);
+
+/**
+ * Abschlussmail an die Kursleitung („… hat den Kurs abgeschlossen“) an den Support: Kursautor ist
+ * das Konto „Vitarights“ mit einer Adresse, die es nicht gibt. Antworten gehen an den Partner, und
+ * der Button „See Student Report“ fällt weg – er führt ins Tutor-Dashboard, das der Support nicht hat.
+ * Tutor verschickt die Mail in tutor_course_complete_after (Priorität 10), der Abschluss wird
+ * drumherum gemerkt.
+ */
+const VITARIGHTS_ONBOARDING_SUPPORT_EMAIL = 'onboarding@vitarights.de';
+
+add_action(
+	'tutor_course_complete_after',
+	function ( $course_id, $user_id ) {
+		$GLOBALS['vitarights_onboarding_completion'] = array(
+			'teacher' => get_the_author_meta( 'user_email', get_post_field( 'post_author', $course_id ) ),
+			'student' => get_the_author_meta( 'user_email', $user_id ),
+		);
+	},
+	9,
+	2
+);
+
+add_action(
+	'tutor_course_complete_after',
+	function () {
+		unset( $GLOBALS['vitarights_onboarding_completion'] );
+	},
+	11
+);
+
+add_filter(
+	'wp_mail',
+	function ( $args ) {
+		$completion = $GLOBALS['vitarights_onboarding_completion'] ?? null;
+		if ( ! $completion || $args['to'] !== $completion['teacher'] ) {
+			return $args;
+		}
+		$args['to']      = VITARIGHTS_ONBOARDING_SUPPORT_EMAIL;
+		// Ohne Report-Button und ohne Anrede („vitarights,“); Tutor gibt „Student info“ unübersetzt aus
+		$args['message'] = preg_replace(
+			array( '#<div class="tutor-email-buttons[^"]*">.*?</div>#s', '#<p class="tutor-email-greetings">.*?</p>#s' ),
+			'',
+			$args['message']
+		);
+		$args['message'] = str_replace( '>Student info<', '>Partner<', $args['message'] );
+		$args['headers'] = (array) $args['headers'];
+		$args['headers'][] = 'Reply-To: ' . $completion['student'];
+		return $args;
+	}
 );
 
 /**

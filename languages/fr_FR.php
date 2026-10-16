@@ -197,7 +197,7 @@ return array(
 				'subject'       => '« {student_name} » a terminé le cours',
 				'heading'       => 'Cours terminé',
 				'message'       => '<strong>{student_name}</strong> a terminé avec succès le cours <strong>{course_name}</strong>.',
-				'before_button' => 'La progression et les détails se trouvent dans le rapport de ce participant.',
+				'before_button' => 'L’état de tous les partenaires se trouve dans l’<a href="{site_url}/partner-einladen/">aperçu de la page « Partner einladen »</a>.',
 				'footer_text'   => 'Vous pouvez répondre à cet e-mail pour contacter le participant.',
 			),
 		),

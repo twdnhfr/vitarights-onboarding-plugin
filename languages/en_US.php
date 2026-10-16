@@ -58,7 +58,7 @@ return array(
 				'subject'       => '“{student_name}” has completed the course',
 				'heading'       => 'Course completed',
 				'message'       => '<strong>{student_name}</strong> has successfully completed the course <strong>{course_name}</strong>.',
-				'before_button' => 'You can find progress and details in this participant’s report.',
+				'before_button' => 'You can see the status of all partners in the <a href="{site_url}/partner-einladen/">overview on the “Partner einladen” page</a>.',
 				'footer_text'   => 'You can reply to this email to contact the participant.',
 			),
 		),

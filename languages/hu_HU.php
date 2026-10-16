@@ -198,7 +198,7 @@ return array(
 				'subject'       => '„{student_name}” elvégezte a kurzust',
 				'heading'       => 'Kurzus elvégezve',
 				'message'       => '<strong>{student_name}</strong> sikeresen elvégezte a(z) <strong>{course_name}</strong> kurzust.',
-				'before_button' => 'A haladást és a részleteket a résztvevő jelentésében találja.',
+				'before_button' => 'Az összes partner állapotát a <a href="{site_url}/partner-einladen/">„Partner einladen” oldal áttekintésében</a> találja.',
 				'footer_text'   => 'Erre az e-mailre válaszolva felveheti a kapcsolatot a résztvevővel.',
 			),
 		),
