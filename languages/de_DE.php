@@ -132,6 +132,9 @@ return array(
 	),
 
 
+	// Anrede in Tutor-Mails – Tutor setzt dort nur „{Name},“
+	'email_greeting'                => 'Guten Tag %s,',
+
 	// Tutor-Pro-Mailvorlagen (Betreff/Überschrift/Text sind dort teils fest auf Englisch hinterlegt)
 	'emails'                        => array(
 		'email_to_students' => array(

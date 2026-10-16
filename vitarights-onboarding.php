@@ -231,7 +231,8 @@ add_filter(
  * Abschlussmail an die Kursleitung („… hat den Kurs abgeschlossen“) an den Support: Kursautor ist
  * das Konto „Vitarights“ mit einer Adresse, die es nicht gibt. Antworten gehen an den Partner, und
  * der Button „See Student Report“ fällt weg – er führt ins Tutor-Dashboard, das der Support nicht hat.
- * Tutor verschickt die Mail in tutor_course_complete_after (Priorität 10), der Abschluss wird
+ * Die Abschlussmail an den Partner bekommt eine Anrede in seiner Sprache – Tutor setzt nur „{Name},“.
+ * Tutor verschickt beide Mails in tutor_course_complete_after (Priorität 10), der Abschluss wird
  * drumherum gemerkt.
  */
 const VITARIGHTS_ONBOARDING_SUPPORT_EMAIL = 'onboarding@vitarights.de';
@@ -242,6 +243,7 @@ add_action(
 		$GLOBALS['vitarights_onboarding_completion'] = array(
 			'teacher' => get_the_author_meta( 'user_email', get_post_field( 'post_author', $course_id ) ),
 			'student' => get_the_author_meta( 'user_email', $user_id ),
+			'locale'  => vitarights_onboarding_user_locale( $user_id ),
 		);
 	},
 	9,
@@ -260,6 +262,17 @@ add_filter(
 	'wp_mail',
 	function ( $args ) {
 		$completion = $GLOBALS['vitarights_onboarding_completion'] ?? null;
+		if ( $completion && $args['to'] === $completion['student'] ) {
+			$greeting = vitarights_onboarding_strings( $completion['locale'] )['email_greeting'] ?? '';
+			if ( $greeting ) {
+				$args['message'] = preg_replace_callback(
+					'#(<p class="tutor-email-greetings">)\s*(.*?),\s*(</p>)#s',
+					fn ( $m ) => $m[1] . sprintf( $greeting, $m[2] ) . $m[3],
+					$args['message']
+				);
+			}
+			return $args;
+		}
 		if ( ! $completion || $args['to'] !== $completion['teacher'] ) {
 			return $args;
 		}

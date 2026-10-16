@@ -42,6 +42,9 @@ return array(
 		'%d Minute'              => array( '%d minute', '%d minutes' ),
 	),
 
+	// Anrede in Tutor-Mails – Tutor setzt dort nur „{Name},“
+	'email_greeting'        => 'Hello %s,',
+
 	// Tutor-Pro-Mailvorlagen (wie de_DE.php, Inhalt angepasst statt Tutor-Standard)
 	'emails'                => array(
 		'email_to_students' => array(

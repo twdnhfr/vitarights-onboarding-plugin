@@ -183,6 +183,9 @@ return array(
 		'%d Minute'                                         => array( '%d perc', '%d perc' ),
 	),
 
+	// Anrede in Tutor-Mails – Tutor setzt dort nur „{Name},“
+	'email_greeting'                => 'Kedves %s!',
+
 	'emails'                        => array(
 		'email_to_students' => array(
 			'completed_course' => array(

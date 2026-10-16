@@ -182,6 +182,9 @@ return array(
 		'%d Minute'                                         => array( '%d minute', '%d minutes' ),
 	),
 
+	// Anrede in Tutor-Mails – Tutor setzt dort nur „{Name},“
+	'email_greeting'                => 'Bonjour %s,',
+
 	'emails'                        => array(
 		'email_to_students' => array(
 			'completed_course' => array(
