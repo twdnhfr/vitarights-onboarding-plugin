@@ -233,17 +233,21 @@ add_filter(
  * der Button „See Student Report“ fällt weg – er führt ins Tutor-Dashboard, das der Support nicht hat.
  * Die Abschlussmail an den Partner bekommt eine Anrede in seiner Sprache – Tutor setzt nur „{Name},“.
  * Tutor verschickt beide Mails in tutor_course_complete_after (Priorität 10), der Abschluss wird
- * drumherum gemerkt.
+ * drumherum gemerkt. Dabei gilt die Sprache des Partners – auch wenn ein Admin den Abschluss im Backend
+ * auslöst, sonst kämen Tutors feste Beschriftungen („Zertifikat herunterladen“) in dessen Sprache.
  */
 const VITARIGHTS_ONBOARDING_SUPPORT_EMAIL = 'onboarding@vitarights.de';
 
 add_action(
 	'tutor_course_complete_after',
 	function ( $course_id, $user_id ) {
+		$locale = vitarights_onboarding_user_locale( $user_id );
 		$GLOBALS['vitarights_onboarding_completion'] = array(
-			'teacher' => get_the_author_meta( 'user_email', get_post_field( 'post_author', $course_id ) ),
-			'student' => get_the_author_meta( 'user_email', $user_id ),
-			'locale'  => vitarights_onboarding_user_locale( $user_id ),
+			'teacher'  => get_the_author_meta( 'user_email', get_post_field( 'post_author', $course_id ) ),
+			'student'  => get_the_author_meta( 'user_email', $user_id ),
+			'locale'   => $locale,
+			// Nur zurückschalten, wenn wirklich umgeschaltet wurde (wie bei der Einladung)
+			'switched' => switch_to_locale( $locale ),
 		);
 	},
 	9,
@@ -253,6 +257,9 @@ add_action(
 add_action(
 	'tutor_course_complete_after',
 	function () {
+		if ( ! empty( $GLOBALS['vitarights_onboarding_completion']['switched'] ) ) {
+			restore_previous_locale();
+		}
 		unset( $GLOBALS['vitarights_onboarding_completion'] );
 	},
 	11
