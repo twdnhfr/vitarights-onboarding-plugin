@@ -291,6 +291,63 @@ add_filter(
 );
 
 /**
+ * Logo im Kopf der Tutor-Mails: Die eingestellte Medien-ID (tutor_email_template_logo_id) stammt von
+ * der alten Seite und existiert nicht mehr – ohne Bild nimmt Tutor-Pro keine Adresse, das Logo wäre
+ * kaputt. Dann das Website-Logo.
+ */
+add_filter(
+	'tutor_email_logo_src',
+	function ( $url ) {
+		return $url ? $url : wp_get_attachment_image_url( (int) get_option( 'site_logo' ), 'full' );
+	},
+	20
+);
+
+/**
+ * Schon abgeschlossene Kurse nicht noch einmal abschließen: Tutors „Kurs abschließen“ (Formular und
+ * AJAX) und „Als abgeschlossen markieren“ im Backend prüfen das nicht – jeder weitere Klick ergäbe einen
+ * zweiten Abschluss mit neuem Zertifikat und neuen Mails. Stattdessen antworten, als hätte es geklappt.
+ */
+function vitarights_onboarding_already_completed( $user_id ) {
+	$course_id = absint( $_POST['course_id'] ?? 0 );
+	return $course_id && $user_id && tutor_utils()->is_completed_course( $course_id, $user_id, false );
+}
+
+add_action(
+	'init',
+	function () {
+		if ( 'tutor_complete_course' === ( $_POST['tutor_action'] ?? '' ) && vitarights_onboarding_already_completed( get_current_user_id() ) ) {
+			wp_safe_redirect( get_permalink( absint( $_POST['course_id'] ) ) );
+			exit;
+		}
+	},
+	9
+);
+
+add_action(
+	'wp_ajax_tutor_complete_course',
+	function () {
+		if ( vitarights_onboarding_already_completed( get_current_user_id() ) ) {
+			wp_send_json( array( 'status_code' => 200, 'success' => true, 'message' => __( 'Course completed successfully', 'tutor' ) ) );
+		}
+	},
+	9
+);
+
+add_action(
+	'wp_ajax_tutor_enrolled_course_complete',
+	function () {
+		$course_id  = absint( $_POST['course_id'] ?? 0 );
+		$student_id = absint( $_POST['student_id'] ?? 0 );
+		// Nur wer den Kurs bearbeiten darf – sonst ließe sich abfragen, wer abgeschlossen hat
+		if ( tutor_utils()->can_user_edit_course( get_current_user_id(), $course_id ) && vitarights_onboarding_already_completed( $student_id ) ) {
+			wp_send_json( array( 'status_code' => 200, 'success' => true, 'message' => __( 'Course completed successfully', 'tutor-pro' ) ) );
+		}
+	},
+	9
+);
+
+/**
  * Tutors Rundgang („Your learning experience just got a whole lot better“) bewirbt Dashboard-
  * Funktionen, die Partner hier nicht nutzen – für alle als bereits gesehen markieren.
  */
