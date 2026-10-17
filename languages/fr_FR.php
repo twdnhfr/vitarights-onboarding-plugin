@@ -137,6 +137,9 @@ return array(
 
 		'Course Instructor'                                 => 'Formateur',
 		'See Student Report'                                => 'Voir le rapport',
+		'Reset Password'                                    => 'Réinitialiser le mot de passe',
+		'If the button doesn’t work, copy and paste the following link into your browser:' => 'Si le bouton ne fonctionne pas, copiez le lien suivant dans la barre d’adresse de votre navigateur :',
+		"If you didn't request this change, you can safely ignore this email. Your account will remain the same. Thank you." => 'Si vous n’êtes pas à l’origine de cette demande, vous pouvez ignorer cet e-mail. Votre compte reste inchangé.',
 	),
 
 	'tutor-lms-certificate-builder' => array(
@@ -186,6 +189,13 @@ return array(
 	'email_greeting'                => 'Bonjour %s,',
 
 	'emails'                        => array(
+		'email_to_all'      => array(
+			'forgot_password' => array(
+				'subject' => 'Réinitialisation de votre mot de passe',
+				'heading' => 'Choisissez un nouveau mot de passe',
+				'message' => 'Bonjour {user_name},<br/>nous avons reçu une demande de réinitialisation du mot de passe de votre compte sur {site_name}. Le bouton ci-dessous vous permet de choisir un nouveau mot de passe.',
+			),
+		),
 		'email_to_students' => array(
 			'completed_course' => array(
 				'subject'       => 'Félicitations pour la réussite de {course_name}',

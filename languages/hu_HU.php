@@ -136,6 +136,9 @@ return array(
 
 		'Course Instructor'                                 => 'Oktató',
 		'See Student Report'                                => 'Jelentés megtekintése',
+		'Reset Password'                                    => 'Jelszó visszaállítása',
+		'If the button doesn’t work, copy and paste the following link into your browser:' => 'Ha a gomb nem működik, másolja be az alábbi linket a böngészője címsorába:',
+		"If you didn't request this change, you can safely ignore this email. Your account will remain the same. Thank you." => 'Ha nem Ön kérte a módosítást, nyugodtan figyelmen kívül hagyhatja ezt az e-mailt. Fiókja változatlan marad.',
 	),
 
 	'tutor-lms-certificate-builder' => array(
@@ -187,6 +190,13 @@ return array(
 	'email_greeting'                => 'Kedves %s!',
 
 	'emails'                        => array(
+		'email_to_all'      => array(
+			'forgot_password' => array(
+				'subject' => 'Jelszó visszaállítása',
+				'heading' => 'Új jelszó megadása',
+				'message' => 'Kedves {user_name}!<br/>Kérést kaptunk a(z) {site_name} oldalon lévő fiókja jelszavának visszaállítására. Az alábbi gombbal új jelszót adhat meg.',
+			),
+		),
 		'email_to_students' => array(
 			'completed_course' => array(
 				'subject'       => 'Gratulálunk a kurzus elvégzéséhez: {course_name}',

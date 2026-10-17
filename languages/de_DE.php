@@ -109,6 +109,9 @@ return array(
 		// E-Mails (Teile, die über gettext laufen; Betreff/Text: siehe emails-Block unten)
 		'Course Instructor'                                 => 'Kursleitung',
 		'See Student Report'                                => 'Bericht ansehen',
+		'Reset Password'                                    => 'Passwort zurücksetzen',
+		'If the button doesn’t work, copy and paste the following link into your browser:' => 'Falls der Button nicht funktioniert, kopieren Sie diesen Link in die Adresszeile Ihres Browsers:',
+		"If you didn't request this change, you can safely ignore this email. Your account will remain the same. Thank you." => 'Falls Sie das nicht angefordert haben, können Sie diese E-Mail einfach ignorieren. Ihr Konto bleibt unverändert.',
 	),
 
 	'tutor-lms-certificate-builder' => array(
@@ -137,6 +140,13 @@ return array(
 
 	// Tutor-Pro-Mailvorlagen (Betreff/Überschrift/Text sind dort teils fest auf Englisch hinterlegt)
 	'emails'                        => array(
+		'email_to_all'      => array(
+			'forgot_password' => array(
+				'subject' => 'Passwort zurücksetzen',
+				'heading' => 'Neues Passwort festlegen',
+				'message' => 'Guten Tag {user_name},<br/>wir haben eine Anfrage erhalten, das Passwort für Ihr Konto bei {site_name} zurückzusetzen. Über den folgenden Button können Sie ein neues Passwort festlegen.',
+			),
+		),
 		'email_to_students' => array(
 			'completed_course' => array(
 				'subject'       => 'Herzlichen Glückwunsch zum Abschluss: {course_name}',

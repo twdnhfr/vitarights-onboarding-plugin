@@ -228,6 +228,46 @@ add_filter(
 );
 
 /**
+ * Mail „Forgot Password“ in der Sprache des Partners. Tutor Pro baut sie in
+ * retrieve_password_notification_email (Priorität PHP_INT_MAX) aus seinen Vorlagedaten, ohne die beiden
+ * Filter oben – die Vorlage kommt deshalb kurz vorher direkt in Tutors Objekt und danach wieder heraus.
+ * WordPress schaltet dafür zwar auf get_user_locale() um, bei leerem Profil ist das aber die gerade aktive
+ * Sprache (z. B. der englischen Login-Seite oder des Admins), nicht die des Partners. Die festen Texte der
+ * Vorlage (Button usw.) laufen über gettext und kommen so ebenfalls in seiner Sprache.
+ */
+add_filter(
+	'retrieve_password_notification_email',
+	function ( $email, $key, $user_login, $user_data ) {
+		$tutor = null;
+		foreach ( $GLOBALS['wp_filter']['retrieve_password_notification_email']->callbacks[ PHP_INT_MAX ] ?? array() as $callback ) {
+			if ( is_array( $callback['function'] ) && $callback['function'][0] instanceof TUTOR_EMAIL\EmailNotification ) {
+				$tutor = $callback['function'][0];
+			}
+		}
+		if ( ! $tutor ) {
+			return $email;
+		}
+		$locale   = vitarights_onboarding_user_locale( $user_data );
+		$options  = $tutor->email_options;
+		$switched = switch_to_locale( $locale );
+		$tutor->email_options = vitarights_onboarding_email_templates( $options ? $options : array(), $locale );
+		// Läuft nach Tutor (gleiche Priorität, später angemeldet)
+		$restore = function ( $email ) use ( &$restore, $tutor, $options, $switched ) {
+			remove_filter( 'retrieve_password_notification_email', $restore, PHP_INT_MAX );
+			$tutor->email_options = $options;
+			if ( $switched ) {
+				restore_previous_locale();
+			}
+			return $email;
+		};
+		add_filter( 'retrieve_password_notification_email', $restore, PHP_INT_MAX );
+		return $email;
+	},
+	PHP_INT_MAX - 1,
+	4
+);
+
+/**
  * Abschlussmail an die Kursleitung („… hat den Kurs abgeschlossen“) an den Support: Kursautor ist
  * das Konto „Vitarights“ mit einer Adresse, die es nicht gibt. Antworten gehen an den Partner, und
  * der Button „See Student Report“ fällt weg – er führt ins Tutor-Dashboard, das der Support nicht hat.

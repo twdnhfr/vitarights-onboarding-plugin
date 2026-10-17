@@ -47,6 +47,13 @@ return array(
 
 	// Tutor-Pro-Mailvorlagen (wie de_DE.php, Inhalt angepasst statt Tutor-Standard)
 	'emails'                => array(
+		'email_to_all'      => array(
+			'forgot_password' => array(
+				'subject' => 'Reset your password',
+				'heading' => 'Choose a new password',
+				'message' => 'Hello {user_name},<br/>we received a request to reset the password for your account on {site_name}. Use the button below to choose a new password.',
+			),
+		),
 		'email_to_students' => array(
 			'completed_course' => array(
 				'subject'       => 'Congratulations on completing {course_name}',
