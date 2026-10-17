@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vitarights Onboarding
  * Description: Kleine Anpassungen für das Partner-Onboarding (Tutor LMS + Magic Login).
- * Version:     1.7.5
+ * Version:     1.7.6
  * Author:      Vitarights
  * Update URI:  https://github.com/twdnhfr/vitarights-onboarding-plugin
  * License:     GPL-2.0-or-later
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Muss zur Version im Kopf passen (make release prüft das)
-const VITARIGHTS_ONBOARDING_VERSION = '1.7.5';
+const VITARIGHTS_ONBOARDING_VERSION = '1.7.6';
 const VITARIGHTS_ONBOARDING_FILE    = __FILE__;
 
 require __DIR__ . '/partner-invite.php';
