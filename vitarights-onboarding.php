@@ -355,6 +355,43 @@ add_action(
 );
 
 /**
+ * Passwort zurücksetzen über WordPress statt über das Tutor-Dashboard: Mit Tutors eigenem Login baut
+ * Tutor den Reset-Link in der Mail und „Passwort vergessen?“ aus der Dashboard-Seite + „retrieve-password“.
+ * Wir haben bewusst kein Tutor-Dashboard (Seiten-ID -1), daraus wurde nur der Pfad „/retrieve-password?…“
+ * ohne Domain – im Mailprogramm ein kaputter Link (Apple Mail: „file://…“), auf der Website eine 404.
+ * Ohne Dashboard zeigt der Link deshalb auf wp-login.php?action=lostpassword, und kommt dort ein Link
+ * aus einer Tutor-Mail an (reset_key, user_id), geht es weiter zu WordPress' eigenem Reset-Formular.
+ */
+add_filter(
+	'tutor_dashboard_url',
+	function ( $url, $sub_url ) {
+		if ( 'retrieve-password' !== $sub_url || 'publish' === get_post_status( tutor_utils()->dashboard_page_id() ) ) {
+			return $url;
+		}
+		return wp_lostpassword_url();
+	},
+	20,
+	2
+);
+
+add_action(
+	'login_form_lostpassword',
+	function () {
+		$user = get_userdata( absint( $_GET['user_id'] ?? 0 ) );
+		if ( ! $user || empty( $_GET['reset_key'] ) ) {
+			return;
+		}
+		$args = array(
+			'action' => 'rp',
+			'key'    => sanitize_text_field( wp_unslash( $_GET['reset_key'] ) ),
+			'login'  => rawurlencode( $user->user_login ),
+		);
+		wp_safe_redirect( add_query_arg( $args, network_site_url( 'wp-login.php', 'login' ) ) );
+		exit;
+	}
+);
+
+/**
  * Tutors Rundgang („Your learning experience just got a whole lot better“) bewirbt Dashboard-
  * Funktionen, die Partner hier nicht nutzen – für alle als bereits gesehen markieren.
  */
